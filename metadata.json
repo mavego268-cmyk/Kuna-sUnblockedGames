@@ -1,0 +1,6 @@
+{
+  "name": "Kuna's Unblocked Games",
+  "description": "Kuna's fast and customizable unblocked games portal with curated HTML5 games, custom iframe support, and theme customization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

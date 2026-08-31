@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  --theme-primary: #6366f1;
+  --theme-primary-hover: #4f46e5;
+  --theme-primary-light: #818cf8;
+  --theme-primary-dark: #3730a3;
+  --theme-primary-rgb: 99, 102, 241;
+}
+
+/* Custom Theme Dynamic Styling Utility Helpers */
+.bg-theme-main {
+  background-color: var(--theme-primary);
+}
+
+.bg-theme-hover:hover {
+  background-color: var(--theme-primary-hover);
+}
+
+.bg-theme-subtle {
+  background-color: rgba(var(--theme-primary-rgb), 0.15);
+}
+
+.bg-theme-card {
+  background-color: rgba(var(--theme-primary-rgb), 0.08);
+}
+
+.text-theme-main {
+  color: var(--theme-primary);
+}
+
+.text-theme-light {
+  color: var(--theme-primary-light);
+}
+
+.border-theme-main {
+  border-color: var(--theme-primary);
+}
+
+.border-theme-subtle {
+  border-color: rgba(var(--theme-primary-rgb), 0.35);
+}
+
+.border-theme-hover:hover {
+  border-color: rgba(var(--theme-primary-rgb), 0.6);
+}
+
+.shadow-theme-sm {
+  box-shadow: 0 4px 14px 0 rgba(var(--theme-primary-rgb), 0.25);
+}
+
+.shadow-theme-lg {
+  box-shadow: 0 10px 25px -3px rgba(var(--theme-primary-rgb), 0.35);
+}
+
+.focus-theme:focus {
+  border-color: var(--theme-primary);
+  box-shadow: 0 0 0 2px rgba(var(--theme-primary-rgb), 0.3);
+}
+
+::selection {
+  background-color: var(--theme-primary);
+  color: #ffffff;
+}
+
