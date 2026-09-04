@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>People Playground HTML5 Sandbox</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+    }
+    body {
+      background: #0d0f17;
+      color: #e2e8f0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+    }
+    #toolbar {
+      background: #151926;
+      border-bottom: 1px solid #232b3e;
+      padding: 8px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      z-index: 10;
+    }
+    .tool-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    button, select {
+      background: #1f2739;
+      color: #f1f5f9;
+      border: 1px solid #334155;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+    button:hover {
+      background: #334155;
+      border-color: #64748b;
+    }
+    button.active {
+      background: #4f46e5;
+      border-color: #6366f1;
+      color: #ffffff;
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+    }
+    .btn-danger {
+      background: #881337;
+      border-color: #9f1239;
+    }
+    .btn-danger:hover {
+      background: #9f1239;
+    }
+    .btn-spawn {
+      background: #065f46;
+      border-color: #059669;
+    }
+    .btn-spawn:hover {
+      background: #059669;
+    }
+    #canvas-container {
+      flex: 1;
+      position: relative;
+      background: radial-gradient(circle at 50% 50%, #171c2b 0%, #0c0e17 100%);
+      cursor: crosshair;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #hud {
+      position: absolute;
+      top: 12px;
+      left: 16px;
+      pointer-events: none;
+      font-size: 11px;
+      color: #94a3b8;
+      background: rgba(15, 23, 42, 0.75);
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(4px);
+    }
+    #instructions {
+      position: absolute;
+      bottom: 12px;
+      right: 16px;
+      pointer-events: none;
+      font-size: 11px;
+      color: #64748b;
+      background: rgba(15, 23, 42, 0.85);
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <div class="tool-group">
+      <span style="font-size: 13px; font-weight: 800; color: #818cf8; margin-right: 6px; letter-spacing: 0.5px;">PEOPLE PLAYGROUND</span>
+      <button id="spawn-human" class="btn-spawn">🧍 Spawn Human</button>
+      <button id="spawn-box">📦 Wooden Crate</button>
+      <button id="spawn-barrel" style="background:#7c2d12; border-color:#ea580c;">🛢️ TNT Barrel</button>
+      <button id="spawn-boulder">🪨 Heavy Boulder</button>
+    </div>
+
+    <div class="tool-group">
+      <button id="tool-drag" class="active">✋ Grab & Throw</button>
+      <button id="tool-laser">🔫 Laser Blaster</button>
+      <button id="tool-gravity">⚡ Gravity: ON</button>
+      <button id="tool-slowmo">⏱️ Slow Motion</button>
+      <button id="tool-clear" class="btn-danger">🗑️ Clear All</button>
+    </div>
+  </div>
+
+  <div id="canvas-container">
+    <canvas id="sandboxCanvas"></canvas>
+    <div id="hud">Entities: <span id="entity-count">0</span> | Mode: <span id="mode-text">Grab & Throw</span> | FPS: <span id="fps-text">60</span></div>
+    <div id="instructions">
+      Left Click + Drag: Grab & Toss | Right Click / Laser: Blast | Space: Slow-Mo | C: Clear
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('sandboxCanvas');
+    const ctx = canvas.getContext('2d');
+    const entityCountEl = document.getElementById('entity-count');
+    const modeTextEl = document.getElementById('mode-text');
+    const fpsTextEl = document.getElementById('fps-text');
+
+    let width = 0;
+    let height = 0;
+
+    function resize() {
+      width = canvas.width = canvas.parentElement.clientWidth;
+      height = canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Physics constants
+    let gravity = 0.45;
+    let gravityEnabled = true;
+    let timeScale = 1.0;
+    let currentTool = 'drag'; // 'drag', 'laser'
+
+    // Sound effects synthesizer
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    function playSound(type) {
+      try {
+        if (!audioCtx) audioCtx = new AudioContext();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+        if (type === 'hit') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(140, now);
+          osc.frequency.exponentialRampToValueAtTime(40, now + 0.08);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+          osc.start(now);
+          osc.stop(now + 0.08);
+        } else if (type === 'boom') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(90, now);
+          osc.frequency.exponentialRampToValueAtTime(20, now + 0.3);
+          gain.gain.setValueAtTime(0.4, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+          osc.start(now);
+          osc.stop(now + 0.3);
+        } else if (type === 'laser') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(800, now);
+          osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+          osc.start(now);
+          osc.stop(now + 0.15);
+        } else if (type === 'spawn') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(300, now);
+          osc.frequency.exponentialRampToValueAtTime(500, now + 0.1);
+          gain.gain.setValueAtTime(0.1, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+          osc.start(now);
+          osc.stop(now + 0.1);
+        }
+      } catch (e) {}
+    }
+
+    // Verlet Physics Engine
+    class Point {
+      constructor(x, y, radius = 6, mass = 1, isHead = false, color = '#f87171') {
+        this.x = x;
+        this.y = y;
+        this.oldX = x;
+        this.oldY = y;
+        this.radius = radius;
+        this.mass = mass;
+        this.isHead = isHead;
+        this.color = color;
+        this.pinned = false;
+        this.health = 100;
+      }
+      update() {
+        if (this.pinned) return;
+        const vx = (this.x - this.oldX) * 0.985;
+        const vy = (this.y - this.oldY) * 0.985;
+        this.oldX = this.x;
+        this.oldY = this.y;
+
+        const effectiveGravity = gravityEnabled ? gravity * timeScale * timeScale : 0;
+        this.x += vx * timeScale;
+        this.y += (vy + effectiveGravity) * timeScale;
+
+        // Floor / Wall collisions
+        const bounce = 0.4;
+        if (this.y + this.radius > height) {
+          this.y = height - this.radius;
+          this.oldY = this.y + vy * bounce;
+        } else if (this.y - this.radius < 0) {
+          this.y = this.radius;
+          this.oldY = this.y + vy * bounce;
+        }
+
+        if (this.x + this.radius > width) {
+          this.x = width - this.radius;
+          this.oldX = this.x + vx * bounce;
+        } else if (this.x - this.radius < 0) {
+          this.x = this.radius;
+          this.oldX = this.x + vx * bounce;
+        }
+      }
+    }
+
+    class Stick {
+      constructor(p1, p2, length, stiffness = 1, color = '#94a3b8', width = 4) {
+        this.p1 = p1;
+        this.p2 = p2;
+        this.length = length || Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        this.stiffness = stiffness;
+        this.color = color;
+        this.width = width;
+      }
+      update() {
+        const dx = this.p2.x - this.p1.x;
+        const dy = this.p2.y - this.p1.y;
+        const dist = Math.hypot(dx, dy) || 0.001;
+        const diff = (this.length - dist) / dist;
+        const offset = diff * 0.5 * this.stiffness;
+
+        if (!this.p1.pinned) {
+          this.p1.x -= dx * offset;
+          this.p1.y -= dy * offset;
+        }
+        if (!this.p2.pinned) {
+          this.p2.x += dx * offset;
+          this.p2.y += dy * offset;
+        }
+      }
+      draw() {
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = this.width;
+        ctx.beginPath();
+        ctx.moveTo(this.p1.x, this.p1.y);
+        ctx.lineTo(this.p2.x, this.p2.y);
+        ctx.stroke();
+      }
+    }
+
+    class Ragdoll {
+      constructor(x, y) {
+        this.points = [];
+        this.sticks = [];
+        this.type = 'ragdoll';
+
+        const headColor = '#fca5a5';
+        const bodyColor = '#cbd5e1';
+        const limbColor = '#94a3b8';
+
+        // Points
+        const head = new Point(x, y - 48, 9, 1.2, true, headColor);
+        const neck = new Point(x, y - 36, 4, 1, false, bodyColor);
+        const chest = new Point(x, y - 22, 5, 1.5, false, bodyColor);
+        const hips = new Point(x, y, 6, 1.5, false, bodyColor);
+
+        const leftElbow = new Point(x - 14, y - 22, 4, 0.7, false, limbColor);
+        const leftHand = new Point(x - 26, y - 22, 4, 0.5, false, headColor);
+        const rightElbow = new Point(x + 14, y - 22, 4, 0.7, false, limbColor);
+        const rightHand = new Point(x + 26, y - 22, 4, 0.5, false, headColor);
+
+        const leftKnee = new Point(x - 10, y + 20, 5, 0.9, false, limbColor);
+        const leftFoot = new Point(x - 12, y + 42, 4, 0.6, false, limbColor);
+        const rightKnee = new Point(x + 10, y + 20, 5, 0.9, false, limbColor);
+        const rightFoot = new Point(x + 12, y + 42, 4, 0.6, false, limbColor);
+
+        this.points = [
+          head, neck, chest, hips,
+          leftElbow, leftHand, rightElbow, rightHand,
+          leftKnee, leftFoot, rightKnee, rightFoot
+        ];
+
+        // Sticks
+        this.sticks.push(new Stick(head, neck, 12, 1, '#fca5a5', 6));
+        this.sticks.push(new Stick(neck, chest, 14, 1, bodyColor, 7));
+        this.sticks.push(new Stick(chest, hips, 22, 1, bodyColor, 8));
+
+        this.sticks.push(new Stick(neck, leftElbow, 16, 0.9, limbColor, 4));
+        this.sticks.push(new Stick(leftElbow, leftHand, 14, 0.9, limbColor, 3));
+        this.sticks.push(new Stick(neck, rightElbow, 16, 0.9, limbColor, 4));
+        this.sticks.push(new Stick(rightElbow, rightHand, 14, 0.9, limbColor, 3));
+
+        this.sticks.push(new Stick(hips, leftKnee, 20, 0.9, limbColor, 5));
+        this.sticks.push(new Stick(leftKnee, leftFoot, 22, 0.9, limbColor, 4));
+        this.sticks.push(new Stick(hips, rightKnee, 20, 0.9, limbColor, 5));
+        this.sticks.push(new Stick(rightKnee, rightFoot, 22, 0.9, limbColor, 4));
+      }
+
+      update() {
+        this.points.forEach(p => p.update());
+        for (let i = 0; i < 4; i++) {
+          this.sticks.forEach(s => s.update());
+        }
+      }
+
+      draw() {
+        this.sticks.forEach(s => s.draw());
+        this.points.forEach(p => {
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (p.isHead) {
+            // Draw cute face
+            ctx.fillStyle = '#0f172a';
+            ctx.beginPath();
+            ctx.arc(p.x - 3, p.y - 1, 1.5, 0, Math.PI * 2);
+            ctx.arc(p.x + 3, p.y - 1, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+      }
+    }
+
+    class BoxEntity {
+      constructor(x, y, size = 44, type = 'crate') {
+        this.type = type;
+        this.size = size;
+        this.exploded = false;
+        const half = size / 2;
+
+        const col = type === 'barrel' ? '#ea580c' : type === 'boulder' ? '#475569' : '#b45309';
+        this.p1 = new Point(x - half, y - half, 4, 1, false, col);
+        this.p2 = new Point(x + half, y - half, 4, 1, false, col);
+        this.p3 = new Point(x + half, y + half, 4, 1, false, col);
+        this.p4 = new Point(x - half, y + half, 4, 1, false, col);
+
+        this.points = [this.p1, this.p2, this.p3, this.p4];
+        this.sticks = [
+          new Stick(this.p1, this.p2, size, 1, col, 3),
+          new Stick(this.p2, this.p3, size, 1, col, 3),
+          new Stick(this.p3, this.p4, size, 1, col, 3),
+          new Stick(this.p4, this.p1, size, 1, col, 3),
+          new Stick(this.p1, this.p3, Math.SQRT2 * size, 1, col, 2),
+          new Stick(this.p2, this.p4, Math.SQRT2 * size, 1, col, 2),
+        ];
+      }
+
+      update() {
+        this.points.forEach(p => p.update());
+        for (let i = 0; i < 3; i++) {
+          this.sticks.forEach(s => s.update());
+        }
+      }
+
+      draw() {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(this.p1.x, this.p1.y);
+        ctx.lineTo(this.p2.x, this.p2.y);
+        ctx.lineTo(this.p3.x, this.p3.y);
+        ctx.lineTo(this.p4.x, this.p4.y);
+        ctx.closePath();
+
+        if (this.type === 'barrel') {
+          ctx.fillStyle = '#991b1b';
+          ctx.fill();
+          ctx.strokeStyle = '#f87171';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // TNT Text
+          const cx = (this.p1.x + this.p3.x) / 2;
+          const cy = (this.p1.y + this.p3.y) / 2;
+          ctx.fillStyle = '#fef08a';
+          ctx.font = 'bold 12px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('TNT', cx, cy);
+        } else if (this.type === 'boulder') {
+          ctx.fillStyle = '#334155';
+          ctx.fill();
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = '#78350f';
+          ctx.fill();
+          ctx.strokeStyle = '#d97706';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          // Draw cross
+          ctx.beginPath();
+          ctx.moveTo(this.p1.x, this.p1.y);
+          ctx.lineTo(this.p3.x, this.p3.y);
+          ctx.moveTo(this.p2.x, this.p2.y);
+          ctx.lineTo(this.p4.x, this.p4.y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
+    // Particles system
+    const particles = [];
+    function spawnExplosion(x, y) {
+      playSound('boom');
+      for (let i = 0; i < 40; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 12 + 3;
+        particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: Math.random() * 6 + 2,
+          color: ['#f97316', '#ef4444', '#eab308', '#ffffff'][Math.floor(Math.random() * 4)],
+          life: 1.0,
+          decay: Math.random() * 0.03 + 0.02
+        });
+      }
+
+      // Push all physics points in radius
+      const blastRadius = 220;
+      entities.forEach(ent => {
+        ent.points.forEach(p => {
+          const dx = p.x - x;
+          const dy = p.y - y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < blastRadius && dist > 1) {
+            const force = (1 - dist / blastRadius) * 28;
+            p.oldX = p.x - (dx / dist) * force;
+            p.oldY = p.y - (dy / dist) * force;
+          }
+        });
+      });
+    }
+
+    const entities = [];
+
+    // Spawn defaults
+    function initSandbox() {
+      entities.length = 0;
+      entities.push(new Ragdoll(width * 0.35, height * 0.4));
+      entities.push(new Ragdoll(width * 0.65, height * 0.4));
+      entities.push(new BoxEntity(width * 0.5, height * 0.6, 44, 'crate'));
+      entities.push(new BoxEntity(width * 0.5, height * 0.45, 42, 'barrel'));
+      playSound('spawn');
+    }
+
+    // Mouse Interaction
+    let draggedPoint = null;
+    let mouse = { x: 0, y: 0, isDown: false };
+
+    function getClosestPoint(mx, my, maxDist = 45) {
+      let closest = null;
+      let minD = maxDist;
+      entities.forEach(ent => {
+        ent.points.forEach(p => {
+          const d = Math.hypot(p.x - mx, p.y - my);
+          if (d < minD) {
+            minD = d;
+            closest = p;
+          }
+        });
+      });
+      return closest;
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - rect.left;
+      mouse.y = e.clientY - rect.top;
+      mouse.isDown = true;
+
+      if (e.button === 2 || currentTool === 'laser') {
+        // Laser / Shoot tool
+        playSound('laser');
+        spawnExplosion(mouse.x, mouse.y);
+        return;
+      }
+
+      draggedPoint = getClosestPoint(mouse.x, mouse.y);
+      if (draggedPoint) {
+        draggedPoint.pinned = true;
+        playSound('hit');
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - rect.left;
+      mouse.y = e.clientY - rect.top;
+
+      if (draggedPoint) {
+        draggedPoint.x = mouse.x;
+        draggedPoint.y = mouse.y;
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (draggedPoint) {
+        draggedPoint.pinned = false;
+        // Apply toss velocity
+        const vx = (mouse.x - draggedPoint.oldX) * 0.5;
+        const vy = (mouse.y - draggedPoint.oldY) * 0.5;
+        draggedPoint.oldX = mouse.x - vx;
+        draggedPoint.oldY = mouse.y - vy;
+        draggedPoint = null;
+      }
+      mouse.isDown = false;
+    });
+
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // UI Buttons
+    document.getElementById('spawn-human').addEventListener('click', () => {
+      entities.push(new Ragdoll(Math.random() * (width - 200) + 100, 100));
+      playSound('spawn');
+    });
+    document.getElementById('spawn-box').addEventListener('click', () => {
+      entities.push(new BoxEntity(Math.random() * (width - 200) + 100, 100, 44, 'crate'));
+      playSound('spawn');
+    });
+    document.getElementById('spawn-barrel').addEventListener('click', () => {
+      entities.push(new BoxEntity(Math.random() * (width - 200) + 100, 100, 42, 'barrel'));
+      playSound('spawn');
+    });
+    document.getElementById('spawn-boulder').addEventListener('click', () => {
+      entities.push(new BoxEntity(Math.random() * (width - 200) + 100, 100, 52, 'boulder'));
+      playSound('spawn');
+    });
+
+    const dragBtn = document.getElementById('tool-drag');
+    const laserBtn = document.getElementById('tool-laser');
+    const gravBtn = document.getElementById('tool-gravity');
+    const slowBtn = document.getElementById('tool-slowmo');
+    const clearBtn = document.getElementById('tool-clear');
+
+    dragBtn.addEventListener('click', () => {
+      currentTool = 'drag';
+      dragBtn.classList.add('active');
+      laserBtn.classList.remove('active');
+      modeTextEl.textContent = 'Grab & Throw';
+    });
+
+    laserBtn.addEventListener('click', () => {
+      currentTool = 'laser';
+      laserBtn.classList.add('active');
+      dragBtn.classList.remove('active');
+      modeTextEl.textContent = 'Laser Blaster (Click to Explode)';
+    });
+
+    gravBtn.addEventListener('click', () => {
+      gravityEnabled = !gravityEnabled;
+      gravBtn.textContent = gravityEnabled ? '⚡ Gravity: ON' : '⚡ Gravity: OFF';
+      gravBtn.classList.toggle('active', !gravityEnabled);
+    });
+
+    slowBtn.addEventListener('click', () => {
+      timeScale = timeScale === 1.0 ? 0.3 : 1.0;
+      slowBtn.classList.toggle('active', timeScale !== 1.0);
+    });
+
+    clearBtn.addEventListener('click', () => {
+      entities.length = 0;
+      particles.length = 0;
+      playSound('hit');
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === ' ') {
+        timeScale = timeScale === 1.0 ? 0.3 : 1.0;
+        slowBtn.classList.toggle('active', timeScale !== 1.0);
+      } else if (e.key === 'c' || e.key === 'C') {
+        entities.length = 0;
+      } else if (e.key === 'r' || e.key === 'R') {
+        initSandbox();
+      }
+    });
+
+    initSandbox();
+
+    // Main animation loop
+    let lastTime = performance.now();
+    let frameCount = 0;
+    let fps = 60;
+
+    function loop(currentTime) {
+      requestAnimationFrame(loop);
+
+      frameCount++;
+      if (currentTime - lastTime >= 1000) {
+        fps = frameCount;
+        frameCount = 0;
+        lastTime = currentTime;
+        fpsTextEl.textContent = fps;
+      }
+
+      ctx.clearRect(0, 0, width, height);
+
+      // Grid background
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+      ctx.lineWidth = 1;
+      const gridSize = 40;
+      for (let x = 0; x < width; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < height; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      // Update & Draw entities
+      let totalPts = 0;
+      for (let i = entities.length - 1; i >= 0; i--) {
+        const ent = entities[i];
+        ent.update();
+        ent.draw();
+        totalPts += ent.points.length;
+      }
+
+      // Check barrel explosions on severe impact
+      entities.forEach((ent, idx) => {
+        if (ent.type === 'barrel' && !ent.exploded) {
+          const speed = Math.hypot(ent.p1.x - ent.p1.oldX, ent.p1.y - ent.p1.oldY);
+          if (speed > 16) {
+            ent.exploded = true;
+            spawnExplosion((ent.p1.x + ent.p3.x) / 2, (ent.p1.y + ent.p3.y) / 2);
+            entities.splice(idx, 1);
+          }
+        }
+      });
+
+      // Update & Draw particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * timeScale;
+        p.y += p.vy * timeScale;
+        p.vy += 0.2 * timeScale;
+        p.life -= p.decay;
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Laser or drag guide
+      if (draggedPoint) {
+        ctx.strokeStyle = '#6366f1';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(mouse.x, mouse.y);
+        ctx.lineTo(draggedPoint.x, draggedPoint.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      entityCountEl.textContent = entities.length;
+    }
+
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
