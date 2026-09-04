@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect 4</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 12px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 380px;
+      max-width: 95vw;
+      margin-bottom: 12px;
+    }
+    .status {
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+    .btn {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:hover { background: #2563eb; }
+    .board-container {
+      background: #1e3a8a;
+      padding: 10px;
+      border-radius: 14px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      border: 4px solid #172554;
+    }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(7, 44px);
+      grid-gap: 8px;
+    }
+    .slot {
+      width: 44px;
+      height: 44px;
+      background: #0f172a;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.2s ease;
+    }
+    .slot.p1 { background: #ef4444; box-shadow: inset 0 2px 4px rgba(0,0,0,0.4); }
+    .slot.p2 { background: #eab308; box-shadow: inset 0 2px 4px rgba(0,0,0,0.4); }
+    .slot.win { box-shadow: 0 0 12px #fff, inset 0 2px 4px rgba(0,0,0,0.4); }
+    .slot:hover:not(.p1):not(.p2) { background: #1e293b; }
+    .hint {
+      margin-top: 14px;
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="status" id="status-text">🔴 Red's Turn</div>
+    <button class="btn" onclick="restart()">Reset</button>
+  </div>
+  <div class="board-container">
+    <div class="board" id="board"></div>
+  </div>
+  <div class="hint">Click any column to drop your chip (Red vs Yellow)</div>
+
+  <script>
+    const ROWS = 6;
+    const COLS = 7;
+    let grid = [];
+    let currentPlayer = 1; // 1 = Red, 2 = Yellow
+    let gameOver = false;
+
+    const boardEl = document.getElementById('board');
+    const statusText = document.getElementById('status-text');
+
+    function init() {
+      grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+      currentPlayer = 1;
+      gameOver = false;
+      statusText.innerHTML = "🔴 Red's Turn";
+      boardEl.innerHTML = '';
+
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const slot = document.createElement('div');
+          slot.className = 'slot';
+          slot.id = `slot-${r}-${c}`;
+          slot.addEventListener('click', () => dropPiece(c));
+          boardEl.appendChild(slot);
+        }
+      }
+    }
+
+    function dropPiece(c) {
+      if (gameOver) return;
+
+      // Find lowest available row in column c
+      for (let r = ROWS - 1; r >= 0; r--) {
+        if (grid[r][c] === 0) {
+          grid[r][c] = currentPlayer;
+          const slot = document.getElementById(`slot-${r}-${c}`);
+          slot.classList.add(currentPlayer === 1 ? 'p1' : 'p2');
+
+          const winCells = checkWin(r, c, currentPlayer);
+          if (winCells) {
+            gameOver = true;
+            winCells.forEach(([wr, wc]) => {
+              document.getElementById(`slot-${wr}-${wc}`).classList.add('win');
+            });
+            statusText.innerHTML = currentPlayer === 1 ? "🎉 🔴 Red Wins!" : "🎉 🟡 Yellow Wins!";
+            return;
+          }
+
+          // Check draw
+          if (grid.every(row => row.every(cell => cell !== 0))) {
+            gameOver = true;
+            statusText.innerHTML = "🤝 Game Draw!";
+            return;
+          }
+
+          currentPlayer = currentPlayer === 1 ? 2 : 1;
+          statusText.innerHTML = currentPlayer === 1 ? "🔴 Red's Turn" : "🟡 Yellow's Turn";
+          return;
+        }
+      }
+    }
+
+    function checkWin(r, c, p) {
+      const directions = [
+        [[0, 1], [0, -1]],   // horizontal
+        [[1, 0], [-1, 0]],   // vertical
+        [[1, 1], [-1, -1]],  // diagonal down-right
+        [[1, -1], [-1, 1]]   // diagonal up-right
+      ];
+
+      for (const dir of directions) {
+        let cells = [[r, c]];
+        for (const [dr, dc] of dir) {
+          let cr = r + dr;
+          let cc = c + dc;
+          while (cr >= 0 && cr < ROWS && cc >= 0 && cc < COLS && grid[cr][cc] === p) {
+            cells.push([cr, cc]);
+            cr += dr;
+            cc += dc;
+          }
+        }
+        if (cells.length >= 4) {
+          return cells;
+        }
+      }
+      return null;
+    }
+
+    function restart() {
+      init();
+    }
+
+    init();
+  </script>
+</body>
+</html>

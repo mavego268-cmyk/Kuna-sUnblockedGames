@@ -12,6 +12,7 @@ import { TabCloakModal, CLOAK_PROFILES } from './components/TabCloakModal.jsx';
 import { PanicOverlay } from './components/PanicOverlay.jsx';
 import { ThemeModal } from './components/ThemeModal.jsx';
 import { THEME_PRESETS, applyThemeToDocument } from './utils/theme.js';
+import { resolveGameUrl } from './utils/url.js';
 import { 
   Gamepad2, 
   Sparkles, 
@@ -29,6 +30,21 @@ const STORAGE_CLOAK_KEY = 'unblocked_portal_cloak_v1';
 const STORAGE_PANIC_KEY = 'unblocked_portal_panic_key_v1';
 const STORAGE_THEME_KEY = 'kuna_theme_color_v1';
 
+const sanitizeGamesList = (list) => {
+  if (!Array.isArray(list)) return defaultGames;
+  return list.map(g => {
+    let iframeSrc = g.iframeSrc;
+    let iframeCode = g.iframeCode;
+    if (typeof iframeSrc === 'string' && (iframeSrc.startsWith('/games/') || iframeSrc.startsWith('/Hosted/'))) {
+      iframeSrc = iframeSrc.replace(/^\/+/, '');
+    }
+    if (typeof iframeCode === 'string') {
+      iframeCode = iframeCode.replace(/src=["']\/(games|Hosted)\//g, 'src="$1/');
+    }
+    return { ...g, iframeSrc, iframeCode };
+  });
+};
+
 export default function App() {
   const [games, setGames] = useState(() => {
     const saved = localStorage.getItem(STORAGE_GAMES_KEY);
@@ -36,15 +52,16 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          const sanitized = sanitizeGamesList(parsed);
           // Check if test-1 exists, if not prepend it so the user sees their requested game
-          const hasTest1 = parsed.some(g => g.id === 'test-1' || g.title === 'test 1');
+          const hasTest1 = sanitized.some(g => g.id === 'test-1' || g.title === 'test 1');
           if (!hasTest1) {
             const test1Game = defaultGames.find(g => g.id === 'test-1');
             if (test1Game) {
-              return [test1Game, ...parsed];
+              return [test1Game, ...sanitized];
             }
           }
-          return parsed;
+          return sanitized;
         }
       } catch (e) {
         console.error("Failed to parse saved games", e);
@@ -109,14 +126,18 @@ export default function App() {
 
   // Sync with games.json on mount if available
   useEffect(() => {
-    fetch('/games.json')
-      .then(res => res.json())
+    fetch(resolveGameUrl('games.json'))
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
+          const sanitized = sanitizeGamesList(data);
           // Merge custom user games with latest games.json
           setGames(prev => {
             const customGames = prev.filter(g => g.isCustom);
-            const merged = [...data];
+            const merged = [...sanitized];
             customGames.forEach(cg => {
               if (!merged.some(g => g.id === cg.id)) {
                 merged.push(cg);

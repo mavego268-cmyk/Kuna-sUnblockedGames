@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Word Guess</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 10px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 340px;
+      max-width: 95vw;
+      margin-bottom: 12px;
+    }
+    .title { font-size: 1.5rem; font-weight: 800; color: #10b981; }
+    .btn {
+      background: #334155;
+      color: #f8fafc;
+      border: 1px solid #475569;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn:hover { background: #475569; }
+    .board {
+      display: grid;
+      grid-template-rows: repeat(6, 48px);
+      grid-gap: 6px;
+      margin-bottom: 14px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(5, 48px);
+      grid-gap: 6px;
+    }
+    .tile {
+      width: 48px;
+      height: 48px;
+      border: 2px solid #334155;
+      background: #1e293b;
+      color: #fff;
+      font-size: 1.4rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-transform: uppercase;
+      border-radius: 6px;
+    }
+    .tile.correct { background: #22c55e; border-color: #22c55e; }
+    .tile.present { background: #eab308; border-color: #eab308; }
+    .tile.absent { background: #334155; border-color: #334155; color: #94a3b8; }
+
+    .keyboard {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      align-items: center;
+      width: 100%;
+      max-width: 360px;
+    }
+    .kb-row {
+      display: flex;
+      gap: 4px;
+    }
+    .key-btn {
+      background: #334155;
+      color: #f8fafc;
+      border: none;
+      padding: 10px 8px;
+      min-width: 28px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      border-radius: 4px;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+    .key-btn.wide { min-width: 44px; font-size: 0.75rem; background: #475569; }
+    .key-btn:hover { background: #475569; }
+    .msg {
+      margin-top: 10px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      height: 24px;
+      color: #38bdf8;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">WORD GUESS</div>
+    <button class="btn" onclick="init()">New Game</button>
+  </div>
+  <div class="board" id="board"></div>
+  <div class="keyboard" id="keyboard"></div>
+  <div class="msg" id="msg"></div>
+
+  <script>
+    const WORDS = ['REACT', 'GAMES', 'BLOCK', 'SPACE', 'CYBER', 'PIXEL', 'SONIC', 'QUEST', 'POWER', 'LASER', 'BOARD', 'CLOAK', 'NINJA', 'RETRO', 'SMART', 'FLASH', 'TURBO', 'CRAFT', 'GHOST', 'MAGIC', 'LEVEL', 'SUPER', 'WORLD', 'SPEED'];
+    let targetWord = 'REACT';
+    let currentRow = 0;
+    let currentCol = 0;
+    let currentGuess = '';
+    let gameOver = false;
+
+    const boardEl = document.getElementById('board');
+    const keyboardEl = document.getElementById('keyboard');
+    const msgEl = document.getElementById('msg');
+
+    const KB_LAYOUT = [
+      ['Q','W','E','R','T','Y','U','I','O','P'],
+      ['A','S','D','F','G','H','J','K','L'],
+      ['ENTER','Z','X','C','V','B','N','M','⌫']
+    ];
+
+    function init() {
+      targetWord = WORDS[Math.floor(Math.random() * WORDS.length)];
+      currentRow = 0;
+      currentCol = 0;
+      currentGuess = '';
+      gameOver = false;
+      msgEl.textContent = 'Guess the 5-letter word!';
+      
+      boardEl.innerHTML = '';
+      for (let r = 0; r < 6; r++) {
+        const row = document.createElement('div');
+        row.className = 'row';
+        for (let c = 0; c < 5; c++) {
+          const tile = document.createElement('div');
+          tile.className = 'tile';
+          tile.id = `t-${r}-${c}`;
+          row.appendChild(tile);
+        }
+        boardEl.appendChild(row);
+      }
+
+      renderKeyboard();
+    }
+
+    function renderKeyboard() {
+      keyboardEl.innerHTML = '';
+      KB_LAYOUT.forEach(rowKeys => {
+        const rEl = document.createElement('div');
+        rEl.className = 'kb-row';
+        rowKeys.forEach(k => {
+          const btn = document.createElement('button');
+          btn.className = 'key-btn' + (k.length > 1 ? ' wide' : '');
+          btn.textContent = k;
+          btn.addEventListener('click', () => handleKey(k));
+          rEl.appendChild(btn);
+        });
+        keyboardEl.appendChild(rEl);
+      });
+    }
+
+    function handleKey(k) {
+      if (gameOver) return;
+
+      if (k === 'ENTER') {
+        if (currentGuess.length < 5) {
+          msgEl.textContent = 'Word must be 5 letters!';
+          return;
+        }
+        submitGuess();
+      } else if (k === '⌫' || k === 'BACKSPACE') {
+        if (currentGuess.length > 0) {
+          currentGuess = currentGuess.slice(0, -1);
+          currentCol--;
+          document.getElementById(`t-${currentRow}-${currentCol}`).textContent = '';
+        }
+      } else if (/^[A-Z]$/i.test(k) && currentGuess.length < 5) {
+        const char = k.toUpperCase();
+        document.getElementById(`t-${currentRow}-${currentCol}`).textContent = char;
+        currentGuess += char;
+        currentCol++;
+      }
+    }
+
+    function submitGuess() {
+      const guess = currentGuess;
+      const target = targetWord;
+
+      for (let i = 0; i < 5; i++) {
+        const tile = document.getElementById(`t-${currentRow}-${i}`);
+        if (guess[i] === target[i]) {
+          tile.classList.add('correct');
+        } else if (target.includes(guess[i])) {
+          tile.classList.add('present');
+        } else {
+          tile.classList.add('absent');
+        }
+      }
+
+      if (guess === target) {
+        gameOver = true;
+        msgEl.textContent = '🎉 Brilliant! You guessed it!';
+        return;
+      }
+
+      currentRow++;
+      currentCol = 0;
+      currentGuess = '';
+
+      if (currentRow === 6) {
+        gameOver = true;
+        msgEl.textContent = `Game Over! Word was ${target}`;
+      }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleKey('ENTER');
+      else if (e.key === 'Backspace') handleKey('⌫');
+      else if (/^[a-zA-Z]$/.test(e.key)) handleKey(e.key);
+    });
+
+    init();
+  </script>
+</body>
+</html>

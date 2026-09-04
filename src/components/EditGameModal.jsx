@@ -18,6 +18,7 @@ import {
   SpellCheck,
   Check
 } from 'lucide-react';
+import { resolveGameUrl } from '../utils/url';
 
 const GRADIENTS = [
   { name: 'Indigo Nebula', value: 'from-indigo-600 to-purple-900' },
@@ -305,7 +306,7 @@ export const EditGameModal = ({
               {showPreview && (
                 <div className="w-full h-56 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden relative">
                   <iframe
-                    src={currentSrc}
+                    src={resolveGameUrl(currentSrc)}
                     title="Live Test Preview"
                     className="w-full h-full border-0"
                     sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-pointer-lock"

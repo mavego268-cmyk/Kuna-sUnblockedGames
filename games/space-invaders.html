@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Space Invaders</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      background: #020617;
+      color: #f8fafc;
+      font-family: 'Courier New', Courier, monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      width: 480px;
+      max-width: 95vw;
+      margin-bottom: 8px;
+      font-size: 1.1rem;
+      font-weight: bold;
+    }
+    .score { color: #38bdf8; }
+    .lives { color: #ef4444; }
+    #canvas-container {
+      position: relative;
+      border: 2px solid #1e293b;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.15);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      background: #030712;
+    }
+    .controls {
+      margin-top: 10px;
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>SCORE: <span id="score" class="score">0</span></div>
+    <div>LIVES: <span id="lives" class="lives">❤❤❤</span></div>
+  </div>
+  <div id="canvas-container">
+    <canvas id="invadersCanvas" width="480" height="420"></canvas>
+  </div>
+  <div class="controls">Controls: Left/Right Arrow or A/D to Move | Space to Fire</div>
+
+  <script>
+    const canvas = document.getElementById('invadersCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const livesEl = document.getElementById('lives');
+
+    let score = 0;
+    let lives = 3;
+    let gameOver = false;
+    let victory = false;
+
+    const player = {
+      x: canvas.width / 2 - 15,
+      y: canvas.height - 35,
+      w: 30,
+      h: 18,
+      speed: 4.5
+    };
+
+    let bullets = [];
+    let enemyBullets = [];
+    let enemies = [];
+    let enemyDir = 1;
+    let enemyStepDown = false;
+    let enemySpeed = 1.0;
+    let lastEnemyFire = 0;
+
+    const keys = {};
+
+    function initEnemies() {
+      enemies = [];
+      const rows = 4;
+      const cols = 8;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          enemies.push({
+            x: 50 + c * 45,
+            y: 40 + r * 32,
+            w: 26,
+            h: 18,
+            type: r === 0 ? 3 : (r < 2 ? 2 : 1),
+            alive: true
+          });
+        }
+      }
+    }
+
+    function restart() {
+      score = 0;
+      lives = 3;
+      gameOver = false;
+      victory = false;
+      bullets = [];
+      enemyBullets = [];
+      enemySpeed = 1.0;
+      enemyDir = 1;
+      scoreEl.textContent = '0';
+      livesEl.textContent = '❤❤❤';
+      initEnemies();
+    }
+
+    function update() {
+      if (gameOver || victory) return;
+
+      if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+        player.x = Math.max(10, player.x - player.speed);
+      }
+      if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+        player.x = Math.min(canvas.width - player.w - 10, player.x + player.speed);
+      }
+
+      // Player bullets
+      for (let i = 0; i < bullets.length; i++) {
+        bullets[i].y -= 7;
+      }
+      bullets = bullets.filter(b => b.y > 0);
+
+      // Enemy bullets
+      for (let i = 0; i < enemyBullets.length; i++) {
+        enemyBullets[i].y += 3.5;
+        // Check player hit
+        const eb = enemyBullets[i];
+        if (
+          eb.x > player.x && eb.x < player.x + player.w &&
+          eb.y > player.y && eb.y < player.y + player.h
+        ) {
+          lives--;
+          livesEl.textContent = '❤'.repeat(Math.max(0, lives));
+          enemyBullets.splice(i, 1);
+          i--;
+          if (lives <= 0) {
+            gameOver = true;
+          }
+        }
+      }
+      enemyBullets = enemyBullets.filter(b => b.y < canvas.height);
+
+      // Move enemies
+      let hitEdge = false;
+      const aliveEnemies = enemies.filter(e => e.alive);
+      if (aliveEnemies.length === 0) {
+        victory = true;
+        return;
+      }
+
+      aliveEnemies.forEach(e => {
+        if ((enemyDir === 1 && e.x + e.w >= canvas.width - 15) || (enemyDir === -1 && e.x <= 15)) {
+          hitEdge = true;
+        }
+      });
+
+      if (hitEdge) {
+        enemyDir = -enemyDir;
+        aliveEnemies.forEach(e => {
+          e.y += 12;
+          if (e.y + e.h >= player.y) gameOver = true;
+        });
+      } else {
+        aliveEnemies.forEach(e => {
+          e.x += enemyDir * enemySpeed;
+        });
+      }
+
+      // Enemy random shooting
+      if (Date.now() - lastEnemyFire > 900 && aliveEnemies.length > 0) {
+        const shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
+        enemyBullets.push({ x: shooter.x + shooter.w / 2, y: shooter.y + shooter.h });
+        lastEnemyFire = Date.now();
+      }
+
+      // Bullet - Enemy Collision
+      bullets.forEach((b, bi) => {
+        aliveEnemies.forEach(e => {
+          if (b.x > e.x && b.x < e.x + e.w && b.y > e.y && b.y < e.y + e.h) {
+            e.alive = false;
+            bullets.splice(bi, 1);
+            score += e.type * 10;
+            scoreEl.textContent = score;
+            enemySpeed += 0.05;
+          }
+        });
+      });
+    }
+
+    function draw() {
+      // Clear
+      ctx.fillStyle = '#030712';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Stars
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      for (let i = 0; i < 25; i++) {
+        ctx.fillRect((i * 47) % canvas.width, (i * 73) % canvas.height, 1.5, 1.5);
+      }
+
+      // Draw Player
+      ctx.fillStyle = '#10b981';
+      ctx.beginPath();
+      ctx.roundRect(player.x, player.y + 6, player.w, player.h - 6, 2);
+      ctx.fill();
+      ctx.fillRect(player.x + player.w / 2 - 3, player.y, 6, 6);
+
+      // Draw Player Bullets
+      ctx.fillStyle = '#38bdf8';
+      bullets.forEach(b => {
+        ctx.fillRect(b.x - 1.5, b.y, 3, 9);
+      });
+
+      // Draw Enemy Bullets
+      ctx.fillStyle = '#f43f5e';
+      enemyBullets.forEach(b => {
+        ctx.fillRect(b.x - 1.5, b.y, 3, 7);
+      });
+
+      // Draw Enemies
+      enemies.filter(e => e.alive).forEach(e => {
+        if (e.type === 3) ctx.fillStyle = '#a855f7';
+        else if (e.type === 2) ctx.fillStyle = '#38bdf8';
+        else ctx.fillStyle = '#eab308';
+
+        ctx.beginPath();
+        ctx.roundRect(e.x, e.y, e.w, e.h, 3);
+        ctx.fill();
+
+        // Alien details
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(e.x + 4, e.y + 4, 4, 4);
+        ctx.fillRect(e.x + e.w - 8, e.y + 4, 4, 4);
+      });
+
+      // Overlays
+      if (gameOver) {
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 24px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('INVASION FAILED!', canvas.width / 2, canvas.height / 2 - 10);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = '14px monospace';
+        ctx.fillText('Press SPACE to Restart', canvas.width / 2, canvas.height / 2 + 25);
+      } else if (victory) {
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#10b981';
+        ctx.font = 'bold 24px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('GALAXY SAVED!', canvas.width / 2, canvas.height / 2 - 10);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = '14px monospace';
+        ctx.fillText('Score: ' + score + ' | Press SPACE to Replay', canvas.width / 2, canvas.height / 2 + 25);
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+      if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault();
+
+      if (e.key === ' ') {
+        if (gameOver || victory) {
+          restart();
+        } else if (bullets.length < 3) {
+          bullets.push({ x: player.x + player.w / 2, y: player.y });
+        }
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+    });
+
+    restart();
+    loop();
+  </script>
+</body>
+</html>

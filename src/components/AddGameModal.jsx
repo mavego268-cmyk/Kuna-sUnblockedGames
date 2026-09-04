@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Plus, Eye, Code, AlertCircle } from 'lucide-react';
+import { resolveGameUrl, resolveIframeCode } from '../utils/url';
 
 export const AddGameModal = ({
   isOpen,
@@ -216,15 +217,15 @@ export const AddGameModal = ({
                 <div className="mt-2 h-44 w-full bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
                   {parsedIframeSrc ? (
                     <iframe
-                      src={parsedIframeSrc}
+                      src={resolveGameUrl(parsedIframeSrc)}
                       title="Preview"
                       className="w-full h-full border-0"
-                      sandbox="allow-scripts allow-same-origin allow-forms"
+                      sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock"
                     />
                   ) : (
                     <div 
                       className="w-full h-full"
-                      dangerouslySetInnerHTML={{ __html: parsedIframeCode }} 
+                      dangerouslySetInnerHTML={{ __html: resolveIframeCode(parsedIframeCode) }} 
                     />
                   )}
                 </div>

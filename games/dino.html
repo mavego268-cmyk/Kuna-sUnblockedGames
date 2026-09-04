@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dino Runner</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      width: 550px;
+      max-width: 95vw;
+      margin-bottom: 8px;
+      font-family: monospace;
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+    .score { color: #10b981; }
+    .hi-score { color: #f59e0b; }
+    #canvas-container {
+      border: 2px solid #334155;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    canvas {
+      display: block;
+      background: #020617;
+    }
+    .hint {
+      margin-top: 10px;
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>HI: <span id="hi-score" class="hi-score">00000</span></div>
+    <div>SCORE: <span id="score" class="score">00000</span></div>
+  </div>
+  <div id="canvas-container">
+    <canvas id="dinoCanvas" width="550" height="220"></canvas>
+  </div>
+  <div class="hint">Press Space or Up Arrow or Tap to Jump</div>
+
+  <script>
+    const canvas = document.getElementById('dinoCanvas');
+    const ctx甩 = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const hiScoreEl = document.getElementById('hi-score');
+
+    let score = 0;
+    let hiScore = parseInt(localStorage.getItem('dino_hi') || '0', 10);
+    hiScoreEl.textContent = String(hiScore).padStart(5, '0');
+
+    let isPlaying = false;
+    let gameOver = false;
+    let speed = 6;
+    let groundY = 175;
+
+    const dino = {
+      x: 50,
+      y: groundY - 35,
+      w: 30,
+      h: 35,
+      vy: 0,
+      gravity: 0.7,
+      jumpForce: -12,
+      grounded: true
+    };
+
+    let obstacles = [];
+    let nextObstacleDist = 80;
+    let clouds = [
+      { x: 100, y: 40, speed: 0.6 },
+      { x: 320, y: 60, speed: 0.4 },
+      { x: 480, y: 30, speed: 0.5 }
+    ];
+
+    function start() {
+      score = 0;
+      speed = 6;
+      gameOver = false;
+      isPlaying拼 = true;
+      dino.y = groundY - 35;
+      dino.vy = 0;
+      dino.grounded = true;
+      obstacles = [];
+      nextObstacleDist = 60;
+    }
+
+    function jump() {
+      if (gameOver) {
+        start();
+        return;
+      }
+      if (!isPlaying) {
+        isPlaying = true;
+      }
+      if (dino.grounded) {
+        dino.vy = dino.jumpForce;
+        dino.grounded = false;
+      }
+    }
+
+    function update() {
+      if (gameOver) return;
+
+      // Clouds
+      clouds.forEach(c => {
+        c.x -= c.speed;
+        if (c.x < -60) c.x = canvas.width + 20;
+      });
+
+      if (isPlaying) {
+        score++;
+        scoreEl.textContent = String(Math.floor(score / 4)).padStart(5, '0');
+        if (score % 400 === 0 && speed < 12) speed += 0.5;
+
+        // Dino Physics
+        dino.vy += dino.gravity;
+        dino.y += dino.vy;
+
+        if (dino.y >= groundY - dino.h) {
+          dino.y = groundY - dino.h;
+          dino.vy = 0;
+          dino.grounded = true;
+        }
+
+        // Spawn obstacles
+        nextObstacleDist -= speed;
+        if (nextObstacleDist <= 0) {
+          const type = Math.random() > 0.4 ? 'cactus' : 'double-cactus';
+          const h = type === 'cactus' ? 32 : 36;
+          const w = type === 'cactus' ? 18 : 34;
+          obstacles.push({
+            x: canvas.width,
+            y: groundY - h,
+            w: w,
+            h: h
+          });
+          nextObstacleDist = Math.floor(Math.random() * 80) + 70 + speed * 6;
+        }
+
+        // Move obstacles
+        for (let i = 0; i < obstacles.length; i++) {
+          const ob = obstacles[i];
+          ob.x -= speed;
+
+          // Hitbox collision
+          if (
+            dino.x + 6 < ob.x + ob.w &&
+            dino.x + dino.w - 6 > ob.x &&
+            dino.y + 4 < ob.y + ob.h &&
+            dino.y + dino.h > ob.y
+          ) {
+            gameOver = true;
+            const finalScore = Math.floor(score / 4);
+            if (finalScore > hiScore) {
+              hiScore = finalScore;
+              localStorage.setItem('dino_hi', hiScore);
+              hiScoreEl.textContent = String(hiScore).padStart(5, '0');
+            }
+          }
+        }
+
+        obstacles = obstacles.filter(ob => ob.x + ob.w > 0);
+      }
+    }
+
+    function draw() {
+      ctx甩.fillStyle = '#020617';
+      ctx甩.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Clouds
+      ctx甩.fillStyle = '#1e293b';
+      clouds.forEach(c => {
+        ctx甩.beginPath();
+        ctx甩.arc(c.x, c.y, 14, 0, Math.PI * 2);
+        ctx甩.arc(c.x + 15, c.y - 4, 18, 0, Math.PI * 2);
+        ctx甩.arc(c.x + 32, c.y, 14, 0, Math.PI * 2);
+        ctx甩.fill();
+      });
+
+      // Ground Line
+      ctx甩.strokeStyle = '#334155';
+      ctx甩.lineWidth = 2;
+      ctx甩.beginPath();
+      ctx甩.moveTo(0, groundY);
+      ctx甩.lineTo(canvas.width, groundY);
+      ctx甩.stroke();
+
+      // Dino
+      ctx甩.fillStyle = '#10b981';
+      // Body
+      ctx甩.fillRect(dino.x + 6, dino.y, 18, 24);
+      // Head
+      ctx甩.fillRect(dino.x + 14, dino.y - 6, 16, 14);
+      // Eye
+      ctx甩.fillStyle = '#020617';
+      ctx甩.fillRect(dino.x + 22, dino.y - 3, 3, 3);
+      // Tail
+      ctx甩.fillStyle = '#10b981';
+      ctx甩.fillRect(dino.x, dino.y + 10, 6, 8);
+      // Legs
+      if (dino.grounded && isPlaying && Math.floor(score / 6) % 2 === 0) {
+        ctx甩.fillRect(dino.x + 8, dino.y + 24, 4, 11);
+        ctx甩.fillRect(dino.x + 18, dino.y + 24, 4, 7);
+      } else {
+        ctx甩.fillRect(dino.x + 8, dino.y + 24, 4, 7);
+        ctx甩.fillRect(dino.x + 18, dino.y + 24, 4, 11);
+      }
+
+      // Obstacles (Cacti)
+      ctx甩.fillStyle = '#f43f5e';
+      obstacles.forEach(ob => {
+        ctx甩.fillRect(ob.x, ob.y, ob.w, ob.h);
+        ctx甩.fillRect(ob.x - 3, ob.y + 8, 3, 8);
+        ctx甩.fillRect(ob.x + ob.w, ob.y + 12, 3, 8);
+      });
+
+      if (!isPlaying) {
+        ctx甩.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx甩.fillRect(0, 0, canvas.width, canvas.height);
+        ctx甩.fillStyle = '#38bdf8';
+        ctx甩.font = 'bold 20px monospace';
+        ctx甩.textAlign = 'center';
+        ctx甩.fillText('DINO RUNNER', canvas.width / 2, 90);
+        ctx甩.font = '13px monospace';
+        ctx甩.fillStyle = '#f8fafc';
+        ctx甩.fillText('Press SPACE or Tap to Jump', canvas.width / 2, 130);
+      } else if (gameOver) {
+        ctx甩.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx甩.fillRect(0, 0, canvas.width, canvas.height);
+        ctx甩.fillStyle = '#ef4444';
+        ctx甩.font = 'bold 22px monospace';
+        ctx甩.textAlign = 'center';
+        ctx甩.fillText('G A M E   O V E R', canvas.width / 2, 90);
+        ctx甩.font = '13px monospace';
+        ctx甩.fillStyle = '#cbd5e1';
+        ctx甩.fillText('Press SPACE to Restart', canvas.width / 2, 130);
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        jump();
+      }
+    });
+
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      jump();
+    });
+
+    loop();
+  </script>
+</body>
+</html>

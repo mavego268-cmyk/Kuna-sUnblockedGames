@@ -7,13 +7,14 @@ import {
   Heart, 
   Info, 
   Star, 
-  Sparkles,
-  Tv,
-  Check,
-  Code,
-  Edit3,
-  Trash2
+  Sparkles, 
+  Tv, 
+  Check, 
+  Code, 
+  Edit3, 
+  Trash2 
 } from 'lucide-react';
+import { resolveGameUrl, resolveIframeCode } from '../utils/url';
 
 export const GamePlayer = ({
   game,
@@ -30,6 +31,9 @@ export const GamePlayer = ({
   const [iframeKey, setIframeKey] = useState(0);
   const [copied, setCopied] = useState(false);
   const iframeContainerRef = useRef(null);
+
+  const resolvedIframeSrc = resolveGameUrl(game.iframeSrc);
+  const resolvedIframeCode = resolveIframeCode(game.iframeCode);
 
   const handleFullscreen = () => {
     if (iframeContainerRef.current) {
@@ -48,13 +52,16 @@ export const GamePlayer = ({
   };
 
   const handleOpenNewTab = () => {
-    if (game.iframeSrc) {
-      window.open(game.iframeSrc, '_blank');
+    if (resolvedIframeSrc) {
+      window.open(resolvedIframeSrc, '_blank');
     }
   };
 
   const handleCopyIframe = () => {
-    navigator.clipboard.writeText(game.iframeCode || `<iframe src="${game.iframeSrc}" width="100%" height="600px" frameborder="0"></iframe>`);
+    const embedText = game.iframeCode 
+      ? resolvedIframeCode 
+      : `<iframe src="${resolvedIframeSrc}" width="100%" height="600px" frameborder="0" allowfullscreen></iframe>`;
+    navigator.clipboard.writeText(embedText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -183,17 +190,17 @@ export const GamePlayer = ({
             <iframe
               key={iframeKey}
               id={`game-frame-${game.id}`}
-              src={game.iframeSrc}
+              src={resolvedIframeSrc}
               title={game.title}
               className="w-full h-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-pointer-lock"
             />
           ) : (
             <div 
               key={iframeKey}
               className="w-full h-full"
-              dangerouslySetInnerHTML={{ __html: game.iframeCode }} 
+              dangerouslySetInnerHTML={{ __html: resolvedIframeCode }} 
             />
           )}
         </div>
